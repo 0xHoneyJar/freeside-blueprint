@@ -1,9 +1,0 @@
-repository: 0xHoneyJar/worlds-api
-commit: 49ece74ddca484966d5b8ea0d27342bf2c443316
-classification: observed
-summary:
-  role: Dual-named meta-system plus deployed world config/manifest runtime.
-  active_for_mvp: false
-  pressure:
-    - worlds-api vs freeside-worlds naming conflict
-    - meta-system docs conflict with deployed runtime

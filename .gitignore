@@ -1,2 +1,4 @@
-node_modules/
+*.exe
+*.test
+/freeside-blueprint
 .DS_Store

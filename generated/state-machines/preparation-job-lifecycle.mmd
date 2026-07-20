@@ -1,8 +1,0 @@
-stateDiagram-v2
-  [*] --> queued
-  queued --> indexing: IndexingStarted
-  queued --> completed: SnapshotAlreadyReady
-  indexing --> completed: IndexingCompleted
-  indexing --> failed: PreparationFailed
-  completed --> [*]
-  failed --> [*]

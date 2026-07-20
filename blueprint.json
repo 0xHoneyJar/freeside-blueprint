@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "product": {
+    "id": "contract-access-risk-audit",
+    "promise": "Accept a chain-qualified contract, combine Sonar and Score snapshots, and produce a presentation-neutral audit artifact.",
+    "transport": "http-pull",
+    "path": ["dashboard", "ordering", "sonar", "score", "ordering", "dashboard"]
+  },
+  "buildings": {
+    "dashboard": {"owns": []},
+    "ordering": {"owns": ["audit_order", "audit_run", "audit_artifact"]},
+    "sonar": {"owns": ["preparation_job", "ownership_snapshot"]},
+    "score": {"owns": ["score_snapshot"]}
+  },
+  "machines": {
+    "order": {
+      "owner": "ordering",
+      "initial": "requested",
+      "states": ["requested", "preparing", "waiting_score", "generating", "ready", "needs_attention"],
+      "transitions": {
+        "requested": {"StartPreparation": "preparing"},
+        "preparing": {"PreparationReady": "waiting_score", "PreparationFailed": "needs_attention"},
+        "waiting_score": {"ScoreSnapshotAvailable": "generating", "ScoreSnapshotUnavailable": "needs_attention"},
+        "generating": {"ArtifactProduced": "ready", "ArtifactFailed": "needs_attention"}
+      }
+    },
+    "preparation": {
+      "owner": "sonar",
+      "initial": "queued",
+      "states": ["queued", "indexing", "ready", "failed"],
+      "transitions": {
+        "queued": {"StartIndexing": "indexing"},
+        "indexing": {"OwnershipReady": "ready", "PreparationFailed": "failed"}
+      }
+    },
+    "audit": {
+      "owner": "ordering",
+      "initial": "queued",
+      "states": ["queued", "generating", "produced", "failed"],
+      "transitions": {
+        "queued": {"StartGeneration": "generating"},
+        "generating": {"ArtifactProduced": "produced", "ArtifactFailed": "failed"}
+      }
+    }
+  },
+  "scenarios": {
+    "happy": {
+      "messages": [
+        ["order", "StartPreparation"],
+        ["preparation", "StartIndexing"],
+        ["preparation", "OwnershipReady"],
+        ["order", "PreparationReady"],
+        ["order", "ScoreSnapshotAvailable"],
+        ["audit", "StartGeneration"],
+        ["audit", "ArtifactProduced"],
+        ["order", "ArtifactProduced"]
+      ],
+      "expect": {"order": "ready", "preparation": "ready", "audit": "produced"}
+    },
+    "preparation_failure": {
+      "messages": [
+        ["order", "StartPreparation"],
+        ["preparation", "StartIndexing"],
+        ["preparation", "PreparationFailed"],
+        ["order", "PreparationFailed"]
+      ],
+      "expect": {"order": "needs_attention", "preparation": "failed", "audit": "queued"}
+    },
+    "score_failure": {
+      "messages": [
+        ["order", "StartPreparation"],
+        ["preparation", "StartIndexing"],
+        ["preparation", "OwnershipReady"],
+        ["order", "PreparationReady"],
+        ["order", "ScoreSnapshotUnavailable"]
+      ],
+      "expect": {"order": "needs_attention", "preparation": "ready", "audit": "queued"}
+    }
+  }
+}

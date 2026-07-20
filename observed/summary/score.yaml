@@ -1,9 +1,0 @@
-repository: 0xHoneyJar/score-api
-commit: 898bc165da2651d0c2ca0692a5d014023ef87c98
-classification: observed
-summary:
-  role: Durable scoring authority with Mibera and generalized community lanes.
-  pressure:
-    - two non-bridged scoring lanes
-    - kitchen registration can create active community rows directly
-    - exact access-risk snapshot capability for the MVP is unverified
