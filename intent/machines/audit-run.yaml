@@ -1,0 +1,39 @@
+schema_version: 1
+id: audit-run-lifecycle
+actor: audit-run
+initial: queued
+states:
+  - queued
+  - collecting
+  - computing
+  - produced
+  - failed
+terminal:
+  - produced
+  - failed
+transitions:
+  - from: queued
+    on: StartAuditRun
+    to: collecting
+  - from: collecting
+    on: RequiredSnapshotsAttached
+    to: computing
+  - from: computing
+    on: ComputationSucceeded
+    to: produced
+    emits:
+      - audit.produced
+  - from: collecting
+    on: SnapshotAcquisitionFailed
+    to: failed
+    emits:
+      - audit.failed
+  - from: computing
+    on: ComputationFailed
+    to: failed
+    emits:
+      - audit.failed
+invariants:
+  - computing requires sonar_snapshot_ref and score_snapshot_ref
+  - produced requires immutable artifact_data and provenance
+  - presentation format is not part of the actor state

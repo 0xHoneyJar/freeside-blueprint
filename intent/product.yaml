@@ -1,0 +1,77 @@
+schema_version: 1
+id: contract-access-risk-audit
+promise: >
+  A visitor submits a chain-qualified contract, sees honest progress,
+  and receives reusable access-risk data without authenticating first.
+inputs:
+  - id: chain
+    required: true
+    description: Chain namespace/reference used to identify the contract.
+  - id: contract_address
+    required: true
+    description: Contract address on the selected chain.
+  - id: snapshot_at
+    required: false
+    description: Optional historical/reference timestamp; null means current supported snapshot.
+  - id: gating_rule
+    required: false
+    description: Optional eligibility rule used to estimate newly eligible and stale access.
+artifact:
+  id: access-risk-audit.v1
+  owner: ordering
+  kind: data
+  presentation_owner: dashboard
+  fields:
+    - holder_turnover
+    - sold_or_lapsed_wallet_count
+    - newly_eligible_wallet_count
+    - concentration_notes
+    - stale_access_risk_estimate
+    - sonar_snapshot_ref
+    - score_snapshot_ref
+    - generated_at
+    - provenance
+    - shadow_access_audit_cta
+golden_path:
+  - id: audit_order_committed
+    owner: ordering
+    actor: audit-order
+    proof: audit_id
+  - id: contract_resolved
+    owner: ordering
+    actor: audit-order
+    proof: canonical_subject
+  - id: ownership_prepared
+    owner: sonar
+    actor: preparation-job
+    proof: ownership.ready
+  - id: score_snapshot_acquired
+    owner: score
+    actor: null
+    proof: score_snapshot_ref
+  - id: artifact_produced
+    owner: ordering
+    actor: audit-run
+    proof: artifact_id
+  - id: artifact_observed
+    owner: dashboard
+    actor: null
+    proof: dashboard_read_receipt
+transport:
+  active: http-pull
+  deferred:
+    - nats-jetstream
+optional_lanes:
+  - id: claim-and-onboard
+    after: artifact_produced
+    required: false
+  - id: shadow-access-audit
+    after: artifact_produced
+    required: false
+never:
+  - require authentication before creating the audit order
+  - map Sonar ownership readiness to Score catalog active
+  - map audit/order progress to Registry Scoring
+  - require Worlds for audit generation
+  - require Discord role access for the first report
+  - expose internal service topology as user-facing product state

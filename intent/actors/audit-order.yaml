@@ -1,0 +1,20 @@
+schema_version: 1
+id: audit-order
+owner: ordering
+identity_key: audit_id
+owns:
+  - canonical_input
+  - public_status
+  - preparation_ref
+  - score_snapshot_ref
+  - artifact_ref
+  - failure_reason
+accepts:
+  - PlaceAuditOrder
+  - ContractResolved
+  - PreparationAccepted
+  - PreparationReady
+  - PreparationFailed
+  - ScoreSnapshotAcquired
+  - AuditProduced
+  - AuditFailed

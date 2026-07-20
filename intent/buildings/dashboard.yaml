@@ -1,0 +1,18 @@
+schema_version: 1
+id: dashboard
+name: Dashboard
+purpose: Present requests, progress, artifacts, and onboarding projections.
+owns: []
+accepts:
+  - visitor_input
+  - audit_order_projection
+  - audit_artifact
+produces:
+  - PlaceAuditOrder
+  - presentation
+never:
+  - own durable audit state
+  - own Sonar readiness
+  - own Score state
+  - connect browser clients directly to a message bus
+runtime_policy: existing-nextjs-service

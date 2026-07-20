@@ -1,0 +1,9 @@
+stateDiagram-v2
+  [*] --> queued
+  queued --> collecting: StartAuditRun
+  collecting --> computing: RequiredSnapshotsAttached
+  computing --> produced: ComputationSucceeded
+  collecting --> failed: SnapshotAcquisitionFailed
+  computing --> failed: ComputationFailed
+  produced --> [*]
+  failed --> [*]

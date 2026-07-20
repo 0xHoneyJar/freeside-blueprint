@@ -1,0 +1,787 @@
+ repo_observation_v1:
+    repository: "0xHoneyJar/score-api"
+    commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+    observed_at: "2026-07-20T20:42:19Z"
+    scope_paths:
+      - "repository-wide"
+    building_candidate:
+      name: "score-api"
+      purpose_observed: "Owns durable scoring authority for two non-bridged lanes (Mibera dimensional scores + multi-community goal rankings), ingesting
+  on-chain/community activity into Postgres and serving versioned REST + MCP reads."
+      purpose_confidence: high
+      durable_nouns_owned:
+        - "community_registry / community_scoring_config (community catalog + JSONB scoring config)"
+        - "community_onchain_events + community_sync_state (scoped bronze + ingest cursors)"
+        - "community_goal_whitelist / community_member_state / community_member_facts (score outputs)"
+        - "community_story_runs / community_story_heads / community_member_stories (story-v3 sealed runs)"
+        - "envio_sync_state + midi_onchain_events + wallet_scores* / MVs (Mibera lane)"
+      explicit_anti_scope:
+        - "Does not own upstream indexer/gateway authority (Envio/belt/SVM sources are pulled)"
+        - "Does not bridge Mibera top-level routes to /v1/communities/:id data models"
+        - "MCP tools and REST query routes are read surfaces, not state owners"
+        - "scoring_outbox drain path was removed; not an active coordination substrate"
+      evidence:
+        - path: "README.md"
+          lines: "9-37"
+          commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+          classification: observed
+        - path: "package.json"
+          lines: "2-5"
+          commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+          classification: observed
+        - path: "supabase/migrations/20260601_001_cycle032_community_registry.sql"
+          lines: "30-95"
+          commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+          classification: observed
+    actor_candidates:
+      - id: "community_story_run"
+        identity_key: "(community_id, run_id)"
+        durable_store: "community_story_runs (+ community_story_heads CAS pointer)"
+        observed_states:
+          - "failed"
+          - "verified"
+          - "superseded"
+        accepted_messages:
+          - "runStoryV3ScoreAndWrite / publishVerifiedStorySnapshot (score job publication)"
+          - "recordNonExactStoryAttempt / insertFailedStoryAttempt (bounded failure persist)"
+          - "UPDATE ... SET status='superseded' (prior head retirement in same CAS tx)"
+        emitted_facts:
+          - "sealed verified run row with exact=true digests/fingerprint"
+          - "failed run row with exact=false + failure_diagnostics"
+          - "head pointer swap on community_story_heads"
+        effects:
+          - "atomic same-tx score-state write + community_score_watermark advance"
+          - "member story / gate evidence publication under the run"
+          - "prior verified head retired to superseded"
+        confidence: high
+        evidence:
+          - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+            lines: "516-667"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/story-snapshot-publisher.ts"
+            lines: "498-546"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/story-run-orchestrator.ts"
+            lines: "1-23"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - id: "community"
+        identity_key: "community_id"
+        durable_store: "community_registry (+ community_tracked_contracts, community_kitchen_registration, community_scoring_config)"
+        observed_states:
+          - "provisioning"
+          - "active"
+          - "paused"
+          - "disabled"
+        accepted_messages:
+          - "POST /v1/communities/register → registerCommunityByContract"
+          - "scoring-config provision/update / adoptQuestionnaire (config mutation)"
+          - "ops/migration status flips (e.g. disabled cleanup)"
+        emitted_facts:
+          - "registry row created with status='active' on kitchen register"
+          - "tracked contract + kitchen_registration audit row"
+        effects:
+          - "catalog invalidation after register"
+          - "servable directory still requires scored goal emission (active ≠ servable)"
+        confidence: medium
+        evidence:
+          - path: "supabase/migrations/20260601_001_cycle032_community_registry.sql"
+            lines: "32-41"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/community-kitchen.ts"
+            lines: "180-213"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/routes/communities-kitchen.ts"
+            lines: "98-139"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - id: "community_sync_cursor"
+        identity_key: "(community_id, asset_key)"
+        durable_store: "community_sync_state"
+        observed_states:
+          - "pending"
+          - "in_progress"
+          - "success"
+          - "failed"
+          - "stale"
+        accepted_messages:
+          - "runSyncStage page commit (bronze insert + advanceCursor)"
+          - "setStatus success|stale|failed"
+          - "resetCursor (full re-walk)"
+        emitted_facts:
+          - "last_event_key advanced only with committed bronze page"
+          - "status/error markers for resume and freshness"
+        effects:
+          - "idempotent bronze upsert into community_onchain_events"
+          - "crash-safe resume-from-cursor"
+        confidence: high
+        evidence:
+          - path: "supabase/migrations/20260601_001_cycle032_community_registry.sql"
+            lines: "84-95"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "supabase/migrations/20260628_001_sync_state_allow_stale.sql"
+            lines: "18-20"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/community-sync.ts"
+            lines: "196-274"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - id: "envio_sync_category"
+        identity_key: "category_key"
+        durable_store: "envio_sync_state"
+        observed_states:
+          - "success"
+          - "failed"
+          - "in_progress"
+        accepted_messages:
+          - "syncIndexerSources / dailyDimensionSync incremental or full sync"
+          - "watermark advance only after successful category fetch+write"
+        emitted_facts:
+          - "last_event_timestamp / last_sync_status / events_synced"
+        effects:
+          - "populates Mibera midi_onchain_events; failed sync leaves watermark put"
+        confidence: medium
+        evidence:
+          - path: "supabase/migrations/005_sync_state.sql"
+            lines: "10-21"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "trigger/jobs/sync-indexer.ts"
+            lines: "365-368"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "trigger/jobs/daily-sync.ts"
+            lines: "615-616"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: inferred
+    state_machines:
+      - id: "sm_community_story_run"
+        actor_candidate: "community_story_run"
+        initial_state: null
+        states:
+          - "failed"
+          - "verified"
+          - "superseded"
+        transitions:
+          - from: null
+            message: "publishVerifiedStorySnapshot insert"
+            to: "verified"
+            guards:
+              - "exact=true and required digest fields present (table CHECKs)"
+              - "truth gates / fingerprint recheck before insert"
+            effects:
+              - "write score state + watermark; CAS community_story_heads"
+            evidence:
+              - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+                lines: "557-636"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+              - path: "src/lib/community/story-snapshot-publisher.ts"
+                lines: "459-546"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: null
+            message: "insertFailedStoryAttempt / recordNonExactStoryAttempt"
+            to: "failed"
+            guards:
+              - "exact=false and failure_diagnostics non-empty"
+            effects:
+              - "persist bounded diagnostics; no head promotion"
+            evidence:
+              - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+                lines: "598-640"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+              - path: "src/lib/community/story-snapshot-publisher.ts"
+                lines: "325-343"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: "verified"
+            message: "retire prior head during next verified publish"
+            to: "superseded"
+            guards:
+              - "UPDATE only when status='verified' AND exact=true"
+              - "DB trigger allows only verified→superseded with all other columns unchanged"
+            effects:
+              - "frees head for CAS to new verified run_id"
+            evidence:
+              - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+                lines: "646-667"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+              - path: "src/lib/community/story-snapshot-publisher.ts"
+                lines: "498-514"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+        illegal_transition_handling: "BEFORE UPDATE trigger raises SQLSTATE 55000 'community story runs are immutable; only verified -> superseded is allowed'"
+        completeness: complete
+      - id: "sm_community_registry_status"
+        actor_candidate: "community"
+        initial_state: "provisioning"
+        states:
+          - "provisioning"
+          - "active"
+          - "paused"
+          - "disabled"
+        transitions:
+          - from: null
+            message: "registerCommunityByContract"
+            to: "active"
+            guards:
+              - "advisory xact lock on kitchen:chain:contract"
+              - "idempotent if tracked contract already exists"
+            effects:
+              - "insert registry + tracked_contracts + kitchen_registration"
+            evidence:
+              - path: "src/lib/community/community-kitchen.ts"
+                lines: "151-213"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: "provisioning"
+            message: "kitchen activation backfill (migration/ops)"
+            to: "active"
+            guards: []
+            effects:
+              - "flip stuck provisioning rows"
+            evidence:
+              - path: "supabase/migrations/20260710_002_issue409_kitchen_activation_backfill.sql"
+                lines: "26-28"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: "active"
+            message: "ops disable (observed migration cleanup)"
+            to: "disabled"
+            guards: []
+            effects:
+              - "remove from active catalog consumers"
+            evidence:
+              - path: "supabase/migrations/20260707_001_azuki_onboard_cleanup.sql"
+                lines: "24-24"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+        illegal_transition_handling: "CHECK constraint on status; lookup treats non-active as miss / PROVISIONING distinction via lookupRegistryStatusByContract"
+        completeness: partial
+      - id: "sm_community_sync_cursor"
+        actor_candidate: "community_sync_cursor"
+        initial_state: "pending"
+        states:
+          - "pending"
+          - "in_progress"
+          - "success"
+          - "failed"
+          - "stale"
+        transitions:
+          - from: null
+            message: "advanceCursor during page txn"
+            to: "in_progress"
+            guards:
+              - "bronze insert and cursor advance in same withCommunity txn"
+            effects:
+              - "last_event_key moves forward"
+            evidence:
+              - path: "src/lib/community/community-sync.ts"
+                lines: "153-161"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: "in_progress"
+            message: "runSyncStage completion"
+            to: "success"
+            guards:
+              - "newest event within SYNC_STALENESS_HOURS"
+            effects:
+              - "markStageComplete(sync)"
+            evidence:
+              - path: "src/lib/community/community-sync.ts"
+                lines: "239-256"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: "in_progress"
+            message: "runSyncStage completion (stale newest event)"
+            to: "stale"
+            guards:
+              - "isSyncStale(newestEventMs)"
+            effects:
+              - "warn; status not success"
+            evidence:
+              - path: "src/lib/community/community-sync.ts"
+                lines: "239-261"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: null
+            message: "runSyncStage catch"
+            to: "failed"
+            guards: []
+            effects:
+              - "cursor remains at last committed page; error rethrown"
+            evidence:
+              - path: "src/lib/community/community-sync.ts"
+                lines: "263-274"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+        illegal_transition_handling: "status CHECK allowlist; cursor advance coupled to bronze commit (no advance on failed page)"
+        completeness: partial
+      - id: "sm_envio_sync_category"
+        actor_candidate: "envio_sync_category"
+        initial_state: null
+        states:
+          - "in_progress"
+          - "success"
+          - "failed"
+        transitions:
+          - from: null
+            message: "category sync success"
+            to: "success"
+            guards:
+              - "watermark advanced only after durable write success"
+            effects:
+              - "last_event_timestamp moves; incremental next pull uses > watermark"
+            evidence:
+              - path: "trigger/jobs/sync-indexer.ts"
+                lines: "365-368"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+          - from: null
+            message: "category sync failure"
+            to: "failed"
+            guards: []
+            effects:
+              - "no watermark advance; window replayed"
+            evidence:
+              - path: "trigger/jobs/sync-indexer.ts"
+                lines: "529-532"
+                commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+                classification: observed
+        illegal_transition_handling: "unknown at application layer beyond CHECK + watermark non-advance on failure"
+        completeness: partial
+    interfaces:
+      commands:
+        - id: "cmd_kitchen_register"
+          surface: "POST /v1/communities/register"
+          owner: "community"
+          evidence:
+            - path: "src/routes/communities-kitchen.ts"
+              lines: "98-139"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_adopt_questionnaire"
+          surface: "POST /v1/communities/:communityId/questionnaire/adopt (via adoptQuestionnaire)"
+          owner: "community_scoring_config"
+          evidence:
+            - path: "src/routes/communities.ts"
+              lines: "1224-1224"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_preview_config"
+          surface: "POST /v1/communities/:communityId/preview"
+          owner: "null (ephemeral; nothing persists)"
+          evidence:
+            - path: "src/routes/communities.ts"
+              lines: "987-991"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_community_goal_score"
+          surface: "trigger community-goal-scoring jobs"
+          owner: "community_story_run | legacy whitelist writers"
+          evidence:
+            - path: "trigger/jobs/community-goal-scoring.ts"
+              lines: "1-13"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_community_sync"
+          surface: "trigger community-sync pipeline / runSyncStage"
+          owner: "community_sync_cursor"
+          evidence:
+            - path: "src/lib/community/community-sync.ts"
+              lines: "196-199"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_mibera_daily_sync"
+          surface: "trigger dailyDimensionSync / syncIndexer*"
+          owner: "envio_sync_category"
+          evidence:
+            - path: "trigger/index.ts"
+              lines: "7-34"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_score_wallet_micro"
+          surface: "trigger scoreWalletMicro (Mibera live/shadow)"
+          owner: "wallet_scores_live"
+          evidence:
+            - path: "trigger/jobs/score-wallet-micro.ts"
+              lines: "1-16"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "cmd_scoring_config_upsert"
+          surface: "scoring-config-store provision/update"
+          owner: "community_scoring_config"
+          evidence:
+            - path: "src/lib/community/scoring-config-store.ts"
+              lines: "1-35"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+      facts:
+        - id: "fact_story_run_verified"
+          store: "community_story_runs.status='verified'"
+          evidence:
+            - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+              lines: "557-600"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "fact_story_run_failed"
+          store: "community_story_runs.status='failed'"
+          evidence:
+            - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+              lines: "598-640"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "fact_story_run_superseded"
+          store: "community_story_runs.status='superseded'"
+          evidence:
+            - path: "src/lib/community/story-snapshot-publisher.ts"
+              lines: "498-506"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "fact_community_registered_active"
+          store: "community_registry.status='active' insert"
+          evidence:
+            - path: "src/lib/community/community-kitchen.ts"
+              lines: "186-189"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "fact_sync_cursor_advanced"
+          store: "community_sync_state.last_event_key"
+          evidence:
+            - path: "src/lib/community/community-sync.ts"
+              lines: "223-230"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "fact_score_watermark"
+          store: "community_score_watermark"
+          evidence:
+            - path: "src/lib/community/story-snapshot-publisher.ts"
+              lines: "483-496"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "fact_goal_whitelist_write"
+          store: "community_goal_whitelist via writeGoalWhitelists"
+          evidence:
+            - path: "trigger/jobs/community-goal-scoring.ts"
+              lines: "35-35"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: inferred
+      queries:
+        - id: "q_health"
+          surface: "GET /v1/health"
+          evidence:
+            - path: "src/routes/health.ts"
+              lines: "30-37"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_ready"
+          surface: "GET /v1/ready"
+          evidence:
+            - path: "src/routes/ready.ts"
+              lines: "18-39"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_communities_catalog"
+          surface: "GET /v1/communities (servable-filtered)"
+          evidence:
+            - path: "src/routes/communities.ts"
+              lines: "141-148"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_mibera_lane_reads"
+          surface: "GET /v1/wallets|/leaderboard|/dimensions|/tiers|/badges|/trust|/aggregates"
+          evidence:
+            - path: "src/routes/index.ts"
+              lines: "52-72"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_community_lane_reads"
+          surface: "GET /v1/communities/:id/{members,roles,goals,lifecycle,...}"
+          evidence:
+            - path: "README.md"
+              lines: "39-54"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_kitchen_lookup"
+          surface: "GET /v1/communities/lookup (active-only hit)"
+          evidence:
+            - path: "src/lib/community/community-kitchen.ts"
+              lines: "63-88"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_mcp_read_surface"
+          surface: "POST /mcp — score-mcp tools (wallet/zone/community capability groups)"
+          evidence:
+            - path: "src/mcp/server.ts"
+              lines: "94-184"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "q_beacon"
+          surface: "GET /.well-known/beacon.json"
+          evidence:
+            - path: "src/index.ts"
+              lines: "156-160"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+      projections:
+        - id: "proj_member_lifecycle"
+          note: "wipe-then-rewrite derived MECE states; not message-driven transitions"
+          store: "community_member_state / community_state_daily"
+          evidence:
+            - path: "src/scoring/community/lifecycle.ts"
+              lines: "107-184"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+            - path: "src/lib/community/state-writer.ts"
+              lines: "1-55"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "proj_goal_whitelist_bands"
+          store: "community_goal_whitelist.band"
+          evidence:
+            - path: "README.md"
+              lines: "82-84"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "proj_roles_directory"
+          store: "roles API projection over rank/lifecycle/traits columns"
+          evidence:
+            - path: "README.md"
+              lines: "91-105"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "proj_mv_dimension_leaderboard"
+          store: "mv_dimension_leaderboard (+ scoring_refresh_log)"
+          evidence:
+            - path: "src/routes/health.ts"
+              lines: "18-27"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+        - id: "proj_member_stories"
+          store: "community_member_stories under verified story head"
+          evidence:
+            - path: "supabase/migrations/20260718_005_community_story_v3.sql"
+              lines: "739-783"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: inferred
+    runtimes:
+      - name: "score-api-http"
+        entrypoint: "src/index.ts → node dist/src/index.js"
+        deployment_config: "Dockerfile + railway.toml"
+        health_path: "/v1/health"
+        durable_stores:
+          - "Railway Postgres (DATABASE_URL; historical supabase/migrations path)"
+        evidence:
+          - path: "src/index.ts"
+            lines: "242-258"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "Dockerfile"
+            lines: "31-35"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "railway.toml"
+            lines: "1-9"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/routes/ready.ts"
+            lines: "18-39"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - name: "trigger-dev-workers"
+        entrypoint: "trigger/index.ts (Trigger.dev project proj_gjoflfpuydtkgoractqj)"
+        deployment_config: "trigger.config.ts; manual pnpm trigger:deploy"
+        health_path: null
+        durable_stores:
+          - "same Postgres as API"
+        evidence:
+          - path: "trigger/index.ts"
+            lines: "1-53"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "trigger.config.ts"
+            lines: "1-21"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "package.json"
+            lines: "20-23"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+    coordination:
+      synchronous_calls:
+        - "Hono REST handlers → Postgres via drizzle/pg pools"
+        - "MCP /mcp → same service layer as REST reads"
+        - "kitchen register advisory xact lock + transactional inserts"
+      asynchronous_paths:
+        - "Trigger.dev schedules/tasks: sync, scoring, snapshots, floors, digests, MV refresh"
+        - "story-v3 publish retries with fresh runId on STORY_PUBLICATION_RETRYABLE"
+      outboxes:
+        - item: "scoring_outbox"
+          status: "removed"
+          evidence:
+            - path: "supabase/migrations/20260502_006_drop_scoring_outbox.sql"
+              lines: "1-59"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+            - path: "src/db/schema/index.ts"
+              lines: "549-550"
+              commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+              classification: observed
+      inboxes: []
+      retries:
+        - "trigger.config.ts default maxAttempts:3 exponential backoff"
+        - "story-run-orchestrator maxPublishAttempts default 3 for STORY_PUBLICATION_RETRYABLE"
+        - "community-goal-scoring child Trigger retries on selected thrown errors"
+      leases:
+        - "withRefreshLocks: global pg_try_advisory_lock slots + per-community advisory lock (RefreshSkipped fail-fast)"
+        - "writeLifecycle / kitchen register pg_advisory_xact_lock"
+        - "community_story_heads CAS publish lock window"
+      reconciliation:
+        - "story-v3 ownership ledger reconcileOwnershipLedger during classification"
+        - "sync cursor resume + weekly resetCursor re-walk for late events"
+        - "score watermark dirty-skip vs forceRescore daily sweep"
+        - "tick-health / tick-sanity post-score records (non-blocking for serving)"
+    contradictions:
+      - claim_a: "railway.toml startCommand = node dist/index.js"
+        claim_b: "Dockerfile CMD and package.json start use node dist/src/index.js"
+        evidence:
+          - path: "railway.toml"
+            lines: "7-7"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "Dockerfile"
+            lines: "35-35"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "package.json"
+            lines: "17-17"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - claim_a: "README version badge 1.7.0"
+        claim_b: "package.json version 0.6.0; boot log says Score API v0.2"
+        evidence:
+          - path: "README.md"
+            lines: "3-3"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "package.json"
+            lines: "3-3"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/index.ts"
+            lines: "245-249"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - claim_a: "community_registry default/status model includes provisioning as live parking state"
+        claim_b: "kitchen register writes status='active' directly because provisioning was never flipped by a pipeline"
+        evidence:
+          - path: "supabase/migrations/20260601_001_cycle032_community_registry.sql"
+            lines: "36-37"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/community-kitchen.ts"
+            lines: "180-188"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - claim_a: "score-wallet-micro comment: triggered by outbox drain"
+        claim_b: "scoring_outbox table/functions dropped; schema comment says outbox removed"
+        evidence:
+          - path: "trigger/jobs/score-wallet-micro.ts"
+            lines: "4-5"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "supabase/migrations/20260502_006_drop_scoring_outbox.sql"
+            lines: "7-12"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - claim_a: "README rank ladder includes core/active/member labels in one table"
+        claim_b: "roles surface renames colliding rungs (core→pillar, active→steady, member→associate)"
+        evidence:
+          - path: "README.md"
+            lines: "83-84"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "README.md"
+            lines: "118-120"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+    possible_bloat:
+      - item: "scoring_outbox + drain path residue"
+        reason: no_consumer
+        evidence:
+          - path: "supabase/migrations/20260502_006_drop_scoring_outbox.sql"
+            lines: "1-20"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "trigger/jobs/score-wallet-micro.ts"
+            lines: "4-5"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - item: "registry status='provisioning' still in CHECK + lookup PROVISIONING path"
+        reason: scaffold_only
+        evidence:
+          - path: "src/lib/community/community-kitchen.ts"
+            lines: "91-95"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/community-kitchen.ts"
+            lines: "180-188"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - item: "two scoring lanes with overlapping vocabulary (tiers/trajectory/dimensions)"
+        reason: duplicate_path
+        evidence:
+          - path: "README.md"
+            lines: "29-66"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - item: "story-v3 lane vs legacy goal-scoring writers behind resolveStoryV3ScoreLane"
+        reason: duplicate_path
+        evidence:
+          - path: "src/lib/community/story-run-orchestrator.ts"
+            lines: "9-14"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "src/lib/community/story-run-orchestrator.ts"
+            lines: "168-197"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+      - item: "boot still logs supabase configured|NOT CONFIGURED after Railway Postgres move"
+        reason: unclear_owner
+        evidence:
+          - path: "src/index.ts"
+            lines: "245-249"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: observed
+          - path: "CLAUDE.md"
+            lines: "1-1"
+            commit: "898bc165da2651d0c2ca0692a5d014023ef87c98"
+            classification: unverified
+    unknowns:
+      - "Whether paused registry status is transitioned by any live application path (only disabled cleanup observed)"
+      - "Whether scoreWalletMicro is still invoked by any producer after outbox removal"
+      - "Which railway.toml vs Dockerfile start path production actually uses"
+      - "Operator intent for when story-v3 becomes mandatory vs permanent dual-lane fail-safe"
+      - "Full MCP tool inventory intentionally not enumerated; capability groups only"
+    candidate_intent_delta:
+      matches_operator_intent:
+        - "Generalized community lane under /v1/communities/:id for multi-world consumers (README names freeside-dashboard)"
+        - "Kitchen register/lookup as ordering-service integration for world onboarding"
+        - "Stable versioned REST + MCP read surface over computed rankings"
+      conflicts_with_operator_intent:
+        - "Single building hosts two non-bridged products (Mibera custom lane + generalized lane) under one runtime name"
+        - "active registration ≠ servable; consumers can see registered communities without score boards"
+      requires_operator_decision:
+        - "Is community_member_state a freeside actor or only a projection (code is wipe-rewrite derivation)?"
+        - "Should community_story_run be the canonical write path for all communities, or remain opt-in via community_story_configs.enabled?"
+        - "Retain Mibera top-level routes inside this building or treat them as a separate authority boundary?"
+        - "Resolve provisioning status: delete from model vs restore async provisioner"

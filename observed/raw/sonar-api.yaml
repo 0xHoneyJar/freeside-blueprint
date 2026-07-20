@@ -1,0 +1,578 @@
+repo_observation_v1:
+  repository: "0xHoneyJar/sonar-api"
+  commit: "d0bdf2a643c2bff09bdaf5f00e34df57045165ec"
+  observed_at: "2026-07-20T20:39:08Z"
+  scope_paths:
+    - "repository-wide"
+
+  building_candidate:
+    name: "freeside-sonar"
+    purpose_observed: "Self-hosted Envio HyperIndex belt that materializes multi-chain NFT/ownership and related onchain entities into Postgres/Hasura, plus a co-deployed Kitchen HTTP service that admits and advances collection-preparation jobs and emits ownership outbox intents."
+    purpose_confidence: high
+    durable_nouns_owned:
+      - "Token (per-token current owner / burn flag)"
+      - "TrackedHolder / TrackedHolder1155 (holder aggregates)"
+      - "AddressType (address classification)"
+      - "kitchen_ingest_jobs (physical preparation jobs)"
+      - "kitchen_outbox (ownership.ready / prep.failed intents)"
+      - "broader Envio entity surface (Vault, Action, SVM tables, etc.) — not fully inventoried"
+    explicit_anti_scope:
+      - "Score / order-counter consumer action after outbox accept (explicitly out of Kitchen proofs)"
+      - "Inline JetStream publish as the Kitchen week-0 transport (pull relay is first-class)"
+      - "Managed per-product RPC re-derivation of holdings (product narrative; belt is the shared read source)"
+    evidence:
+      - "README.md:1-70 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - "grimoires/loa/ARRIVAL.md:8-16 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - "config.yaml:22-24 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - "package.json:2-16 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - "src/kitchen/outbox.ts:1-9 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+  actor_candidates:
+    - id: "kitchen_ingest_job"
+      identity_key: "physical_job_id (unique); canonical key deployment_id+capability_id+capability_version"
+      durable_store: "Postgres table kitchen_ingest_jobs (or MemoryIngestJobStore in non-prod)"
+      observed_states:
+        - "queued"
+        - "indexing"
+        - "completed"
+        - "failed"
+      accepted_messages:
+        - "admit / legacy ingest (create or requeue failed→queued)"
+        - "ack preparation (queued→indexing under external_scale)"
+        - "worker claim/lease + status CAS updates"
+        - "readiness watchdog complete/fail"
+      emitted_facts:
+        - "ownership.ready outbox row on completed"
+        - "prep.failed outbox row on failed"
+      effects:
+        - "optional belt config.yaml patch / SCALE external apply coordination"
+        - "Hasura readiness reads (query side-effect of watchdog)"
+      confidence: high
+      evidence:
+        - "src/kitchen/types.ts:6-7,65-85 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/postgres-ingest-store.ts:38-116 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/ingest-store.ts:172-207,294-345 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/routes.ts:188-223,425-518 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/ingest-worker.ts:527-596 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - id: "kitchen_outbox_intent"
+      identity_key: "event_id (PK); idempotency_key UNIQUE"
+      durable_store: "Postgres table kitchen_outbox"
+      observed_states:
+        - "pending"
+        - "publishing"
+        - "published"
+        - "failed_terminal"
+      accepted_messages:
+        - "enqueue from job completion/failure (or reconcile)"
+        - "relay-pull / transport.accept"
+        - "markPublishing / markPublished / markFailed"
+      emitted_facts:
+        - "ownership.ready envelope"
+        - "prep.failed envelope"
+      effects:
+        - "pull-buffer transport accept only; consumer action not implied"
+      confidence: high
+      evidence:
+        - "src/kitchen/outbox.ts:17-82,180-203 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/postgres-ingest-store.ts:140-157,842-884,942-962 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/routes.ts:656-703 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - id: "nft_token"
+      identity_key: "`${collection}_${chainId}_${tokenId}` → Token.id"
+      durable_store: "Envio/Hasura entity Token (belt Postgres)"
+      observed_states:
+        - "owned (isBurned=false, owner=<addr>)"
+        - "burned (isBurned=true, owner=zero)"
+      accepted_messages:
+        - "ERC-721 Transfer log handling (mint/transfer/burn; staking-aware effective owner on Mibera)"
+      emitted_facts:
+        - "Action rows for mint/burn/transfer (selected collections)"
+        - "best-effort NATS mint publish (events pillar; fail-soft)"
+      effects:
+        - "TrackedHolder count updates (co-maintained projection-like entity)"
+        - "touchAddress enqueue for AddressType"
+      confidence: high
+      evidence:
+        - "schema.graphql:350-359 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/lib/token-ownership.ts:45-83 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/handlers/tracked-erc721.ts:72-85,337-357 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/handlers/mibera-collection.ts:400-444 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/lib/events-publisher.ts:1-18 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - id: "address_type"
+      identity_key: "`${chainId}_${address}` → AddressType.id"
+      durable_store: "Envio/Hasura entity AddressType"
+      observed_states:
+        - "pending"
+        - "eoa"
+        - "contract"
+        - "delegated_eoa"
+      accepted_messages:
+        - "touchAddress (create pending if absent)"
+        - "AddressResolveBase block tick + getAddressCode effect"
+      emitted_facts: []
+      effects:
+        - "eth_getCode via Effect API; recheckAfter scheduling for eoa/delegated_eoa"
+      confidence: high
+      evidence:
+        - "schema.graphql:313-322 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/lib/address-type.ts:4-28 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/lib/touch-address.ts:9-29 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/handlers/address-resolve.ts:44-62,68-88,129-154 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+  state_machines:
+    - id: "sm_kitchen_ingest_job"
+      actor_candidate: "kitchen_ingest_job"
+      initial_state: "queued"
+      states:
+        - "queued"
+        - "indexing"
+        - "completed"
+        - "failed"
+      transitions:
+        - from: null
+          message: "admitCanonical / POST ingest|preparation"
+          to: "queued"
+          guards:
+            - "capability available; preparation runtime available; no migration divergence"
+          effects:
+            - "persist kitchen_ingest_jobs row"
+          evidence:
+            - "src/kitchen/ingest-store.ts:172-194 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/kitchen/routes.ts:55-58,211-223 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "failed"
+          message: "re-admit same physical identity"
+          to: "queued"
+          guards: []
+          effects:
+            - "attempt += 1; clear error/lease"
+          evidence:
+            - "src/kitchen/ingest-store.ts:199-206 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "queued"
+          message: "POST /v2/collection-preparations/ack (external_scale)"
+          to: "indexing"
+          guards:
+            - "KITCHEN_PREPARATION_DRAIN=external_scale"
+            - "expectedAbsentLease"
+            - "expectedStatus=queued"
+          effects: []
+          evidence:
+            - "src/kitchen/routes.ts:455-518 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "queued"
+          message: "worker advance to indexing / local_config patch path"
+          to: "indexing"
+          guards:
+            - "lease claim CAS"
+            - "expectedStatus=queued"
+          effects:
+            - "may patch belt config.yaml"
+          evidence:
+            - "src/kitchen/ingest-worker.ts:312-315 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "queued"
+          message: "advanceQueuedJobsViaReadiness"
+          to: "completed"
+          guards:
+            - "unleasedOnly"
+            - "isIndexedSnapshotReady"
+            - "expectedStatus=queued"
+          effects:
+            - "enqueue ownership.ready outbox"
+          evidence:
+            - "src/kitchen/ingest-worker.ts:543-547 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/kitchen/ingest-store.ts:340-343 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "indexing"
+          message: "advanceIndexingJobs readiness"
+          to: "completed"
+          guards:
+            - "isIndexedSnapshotReady"
+            - "expectedStatus=indexing"
+          effects:
+            - "enqueue ownership.ready outbox"
+          evidence:
+            - "src/kitchen/ingest-worker.ts:578-585 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "indexing"
+          message: "advanceIndexingJobs timeout / readiness_unsupported"
+          to: "failed"
+          guards:
+            - "expectedStatus=indexing"
+          effects:
+            - "enqueue prep.failed outbox"
+          evidence:
+            - "src/kitchen/ingest-worker.ts:567-594 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/kitchen/ingest-store.ts:342-343 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      illegal_transition_handling: "CAS via expectedStatus/expectedLease/expectedAbsentLease returns undefined or HTTP 409 status_conflict / drain_mode_mismatch; unexpected_status rejects non-queued ack"
+      completeness: partial
+
+    - id: "sm_kitchen_outbox_publish"
+      actor_candidate: "kitchen_outbox_intent"
+      initial_state: "pending"
+      states:
+        - "pending"
+        - "publishing"
+        - "published"
+        - "failed_terminal"
+      transitions:
+        - from: null
+          message: "enqueueOwnershipReady / enqueuePrepFailed"
+          to: "pending"
+          guards:
+            - "idempotency_key unique (ON CONFLICT no-op)"
+          effects: []
+          evidence:
+            - "src/kitchen/postgres-ingest-store.ts:942-951 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "pending"
+          message: "relayOutboxRow → markPublishing"
+          to: "publishing"
+          guards:
+            - "not already published/failed_terminal"
+          effects: []
+          evidence:
+            - "src/kitchen/outbox.ts:189-192 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/kitchen/postgres-ingest-store.ts:842-852 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "publishing"
+          message: "transport.accept ok → markPublished"
+          to: "published"
+          guards: []
+          effects: []
+          evidence:
+            - "src/kitchen/outbox.ts:193-196 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "publishing"
+          message: "transport.accept fail → markFailed"
+          to: "pending"
+          guards:
+            - "attempt < maxAttempts (default 8)"
+          effects: []
+          evidence:
+            - "src/kitchen/outbox.ts:199-202 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/kitchen/postgres-ingest-store.ts:868-883 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "publishing"
+          message: "transport.accept fail terminal → markFailed(terminal)"
+          to: "failed_terminal"
+          guards:
+            - "attempt >= maxAttempts"
+          effects: []
+          evidence:
+            - "src/kitchen/outbox.ts:199-202 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      illegal_transition_handling: "relay skips published/failed_terminal; markOutboxFailed refuses to overwrite published; failing transport must not mark published"
+      completeness: complete
+
+    - id: "sm_nft_token_ownership"
+      actor_candidate: "nft_token"
+      initial_state: null
+      states:
+        - "unowned_absent"
+        - "owned"
+        - "burned"
+      transitions:
+        - from: "unowned_absent"
+          message: "Transfer mint (from=zero) / first observed transfer"
+          to: "owned"
+          guards: []
+          effects:
+            - "set owner, mintedAt when from=zero"
+          evidence:
+            - "src/lib/token-ownership.ts:65-83 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "owned"
+          message: "Transfer to non-burn address (or staking-effective owner)"
+          to: "owned"
+          guards: []
+          effects:
+            - "update owner + lastTransferTime"
+          evidence:
+            - "src/lib/token-ownership.ts:65-71 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/handlers/mibera-collection.ts:400-404 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "owned"
+          message: "Transfer to burn address"
+          to: "burned"
+          guards:
+            - "isBurnAddress(candidateOwner)"
+          effects:
+            - "owner=zero; isBurned=true"
+          evidence:
+            - "src/lib/token-ownership.ts:54-70 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      illegal_transition_handling: "No explicit reject path in writer; chain reorg handling is Envio runtime authority (unverified here). Staking deposits that wrongly use `to` as owner are documented as divergence risk."
+      completeness: partial
+
+    - id: "sm_address_type"
+      actor_candidate: "address_type"
+      initial_state: "pending"
+      states:
+        - "pending"
+        - "eoa"
+        - "contract"
+        - "delegated_eoa"
+      transitions:
+        - from: null
+          message: "touchAddress"
+          to: "pending"
+          guards:
+            - "address != zero"
+            - "row absent"
+          effects: []
+          evidence:
+            - "src/lib/touch-address.ts:14-29 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "pending"
+          message: "AddressResolveBase classifyCode"
+          to: "eoa"
+          guards: []
+          effects:
+            - "set recheckAfter"
+          evidence:
+            - "src/handlers/address-resolve.ts:143-154 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+            - "src/lib/address-type.ts:12-19 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "pending"
+          message: "AddressResolveBase classifyCode"
+          to: "contract"
+          guards: []
+          effects:
+            - "clear recheckAfter (needsRecheck false)"
+          evidence:
+            - "src/lib/address-type.ts:12-27 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "pending"
+          message: "AddressResolveBase classifyCode"
+          to: "delegated_eoa"
+          guards: []
+          effects:
+            - "set recheckAfter"
+          evidence:
+            - "src/lib/address-type.ts:12-27 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "eoa"
+          message: "due recheck (recheckAfter <= currentBlock)"
+          to: "contract"
+          guards:
+            - "needsRecheck(eoa)"
+          effects: []
+          evidence:
+            - "src/handlers/address-resolve.ts:77-87,143-154 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - from: "delegated_eoa"
+          message: "due recheck"
+          to: "eoa"
+          guards:
+            - "needsRecheck(delegated_eoa)"
+          effects: []
+          evidence:
+            - "src/lib/address-type.ts:22-27 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      illegal_transition_handling: "touchAddress no-ops if row exists; RPC failures continue without update (KF-017 poison-pill class); no schema-level illegal-transition reject"
+      completeness: partial
+
+  interfaces:
+    commands:
+      - name: "kitchen.legacy_ingest"
+        evidence:
+          - "src/kitchen/routes.ts:188-223 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "kitchen.canonical_preparation_admit"
+        evidence:
+          - "src/kitchen/routes.ts:239-285 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "kitchen.batch_preparation_admit"
+        evidence:
+          - "src/kitchen/protocol.ts:84-96 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "kitchen.ack_preparation_external_scale"
+        evidence:
+          - "src/kitchen/routes.ts:430-518 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "kitchen.outbox_relay_pull"
+        evidence:
+          - "src/kitchen/routes.ts:677-701 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "belt.index_evm_logs"
+        evidence:
+          - "config.yaml:25-40 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+          - "Dockerfile.belt:53 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "svm.webhook_upsert_collection_event"
+        evidence:
+          - "Dockerfile.svm-webhook:1-20 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+          - "src/svm/collection-event-webhook.ts:206-291 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "promote.swap_belt_upstream"
+        evidence:
+          - "README.md:64-66 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+          - "grimoires/loa/reality/entry-points.md:16-22 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [inferred]"
+    facts:
+      - name: "ownership.ready"
+        evidence:
+          - "src/kitchen/outbox.ts:17-43 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "prep.failed"
+        evidence:
+          - "src/kitchen/outbox.ts:18,45-66 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "Token ownership commit"
+        evidence:
+          - "src/lib/token-ownership.ts:83 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "AddressType classification commit"
+        evidence:
+          - "src/handlers/address-resolve.ts:148-154 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "NATS signed mint envelope (events pillar)"
+        evidence:
+          - "src/lib/events-publisher.ts:7-18 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+          - "config.yaml:3-12 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "Action mint/burn/transfer records"
+        evidence:
+          - "src/handlers/tracked-erc721.ts:87-146 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    queries:
+      - name: "Hasura GraphQL entity reads (Token, TrackedHolder, chain_metadata, ...)"
+        evidence:
+          - "README.md:48-60 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "GET /v1/collections/:chain/:contract/status"
+        evidence:
+          - "src/kitchen/routes.ts:177-185 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "GET /v2/indexing-status"
+        evidence:
+          - "src/kitchen/routes.ts:608-631 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "GET /v2/ownership-ready"
+        evidence:
+          - "src/kitchen/routes.ts:633-654 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "GET /v2/outbox"
+        evidence:
+          - "src/kitchen/routes.ts:656-675 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "kitchen /health and /ready"
+        evidence:
+          - "src/kitchen/routes.ts:575-603 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "truth-contract / sense / self MCP+CLI read surfaces"
+        evidence:
+          - "src/truth-contract/cli/sonar-truth.ts:29-99 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+          - "src/sense/cli/sonar-sense.ts:2-6 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    projections:
+      - name: "TrackedHolder tokenCount from Transfer stream"
+        evidence:
+          - "schema.graphql:291-298 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+          - "src/handlers/tracked-erc721.ts:268-310 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "CollectionIndexStatus (missing|indexing|indexed|failed) over job+Hasura snapshot"
+        evidence:
+          - "src/kitchen/status.ts:36-43 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "chain_metadata sync progress"
+        evidence:
+          - "src/kitchen/server.ts:89-116 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+      - name: "ownership-ready inventory over completed jobs"
+        evidence:
+          - "src/kitchen/routes.ts:633-652 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+  runtimes:
+    - name: "belt-indexer"
+      entrypoint: "pnpm envio start --config $BELT_CONFIG (optionally --restart)"
+      deployment_config: "Dockerfile.belt"
+      health_path: null
+      durable_stores:
+        - "ENVIO_PG_* belt Postgres / Hasura"
+      evidence:
+        - "Dockerfile.belt:27-53 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "package.json:14-15 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - name: "kitchen-api"
+      entrypoint: "tsx src/kitchen/server.ts"
+      deployment_config: "Dockerfile.kitchen"
+      health_path: "/health"
+      durable_stores:
+        - "KITCHEN_DATABASE_URL Postgres (required in production)"
+      evidence:
+        - "Dockerfile.kitchen:19-23 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/server.ts:25-38,194-208 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/routes.ts:575-579 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - name: "gateway"
+      entrypoint: "caddy (Caddyfile)"
+      deployment_config: "Dockerfile.gateway"
+      health_path: null
+      durable_stores: []
+      evidence:
+        - "Dockerfile.gateway:1-15 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - name: "erpc"
+      entrypoint: "upstream eRPC image CMD (config baked)"
+      deployment_config: "Dockerfile.erpc"
+      health_path: null
+      durable_stores: []
+      evidence:
+        - "Dockerfile.erpc:1-16 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+    - name: "svm-webhook"
+      entrypoint: "tsx src/svm/collection-event-webhook.ts"
+      deployment_config: "Dockerfile.svm-webhook"
+      health_path: "/health"
+      durable_stores:
+        - "svm.collection_event via Hasura upsert"
+      evidence:
+        - "Dockerfile.svm-webhook:9-20 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/svm/collection-event-webhook.ts:206-291 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+  coordination:
+    synchronous_calls:
+      - "Kitchen → Hasura GraphQL status/progress reads"
+      - "Gateway → belt Hasura upstream (BELT_UPSTREAM)"
+      - "address-resolve → Base RPC eth_getCode (Effect)"
+      - "Kitchen admit capability/probe paths (EVM RPC when live resolve enabled)"
+    asynchronous_paths:
+      - "Envio log handlers → entity writes → optional NATS publish"
+      - "Kitchen worker ticks (claim/patch/readiness) on interval"
+      - "Helius webhook → SVM collection_event upsert"
+      - "Kitchen outbox pull relay (not Score inbox)"
+    outboxes:
+      - "kitchen_outbox (ownership.ready, prep.failed)"
+    inboxes: []
+    retries:
+      - "outbox relay attempt counter → failed_terminal at maxAttempts"
+      - "events-publisher transient NATS reconnect (fail-soft; permanent disable on config errors)"
+      - "failed ingest job re-admit → queued with attempt++"
+    leases:
+      - "kitchen_ingest_jobs.lease_owner / lease_until / lease_epoch"
+    reconciliation:
+      - "reconcileOwnershipReadyOutbox for completed jobs missing outbox rows"
+      - "AddressType due recheck windows"
+      - "truth-contract reconciliation modules present (control-plane; production dual-publish still planned)"
+
+  contradictions:
+    - claim_a: "README identifies repo as 0xHoneyJar/thj-envio"
+      claim_b: "git origin remote is 0xHoneyJar/sonar-api.git; package name is envio-indexer; config name is thj-indexer; product name freeside-sonar"
+      evidence:
+        - "README.md:14 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "package.json:2 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "config.yaml:22 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "grimoires/loa/ARRIVAL.md:42-52 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    - claim_a: "Dockerfile.kitchen header says Kitchen persists ingest jobs on belt Postgres"
+      claim_b: "server requires dedicated KITCHEN_DATABASE_URL in production and refuses belt wipe target coupling"
+      evidence:
+        - "Dockerfile.kitchen:1-8 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/server.ts:25-35 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    - claim_a: "package.json engines imply Node >=22 for the product"
+      claim_b: "Dockerfile.svm-webhook bases on node:20-slim"
+      evidence:
+        - "package.json engines (CLAUDE.md / ARRIVAL closed question Node ≥22) @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [inferred]"
+        - "Dockerfile.svm-webhook:9 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "grimoires/loa/ARRIVAL.md:36 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+  possible_bloat:
+    - item: "truth-contract registry/MCP/CLI surface alongside live indexer"
+      reason: "scaffold_only"
+      evidence:
+        - "src/truth-contract/traceability.ts:23-27 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "package.json:42-55 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    - item: "Alias stack: freeside-sonar / thj-indexer / envio-indexer / thj-envio / sonar-api"
+      reason: "unclear_owner"
+      evidence:
+        - "grimoires/loa/ARRIVAL.md:42-52 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "README.md:14 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    - item: "CollectionIndexStatus vs IngestJobStatus dual status vocabularies"
+      reason: "excess_abstraction"
+      evidence:
+        - "src/kitchen/types.ts:6-7 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "src/kitchen/status.ts:36-43 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+    - item: "loa framework / .claude skill corpus co-located with indexer application"
+      reason: "unclear_owner"
+      evidence:
+        - "AGENTS.md:1-20 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+        - "CLAUDE.md:1-20 @ d0bdf2a643c2bff09bdaf5f00e34df57045165ec [observed]"
+
+  unknowns:
+    - "Operator freeside-blueprint intent document not supplied in this request; intent delta is therefore provisional."
+    - "Whether production Kitchen always runs with KITCHEN_DATABASE_URL vs any residual ENVIO_PG sharing (code forbids prod memory store; share check exists but live Railway topology unverified)."
+    - "Belt indexer process-level health/readiness HTTP path (null in Docker/CMD observation)."
+    - "Full SVM durable actor census (sqd-parallel-loader, warehouse tables) beyond webhook upsert path."
+    - "Whether truth-contract filesystem registry is deployed as an owning runtime or remains offline/agent tooling."
+    - "Score/order-counter inbox implementation location (explicitly out of this repo's Kitchen proofs)."
+
+  candidate_intent_delta:
+    matches_operator_intent:
+      - "Hosts a durable onchain ownership/indexing building with GraphQL read surface and collection onboarding commands (matches product README purpose)."
+    conflicts_with_operator_intent: []
+    requires_operator_decision:
+      - "Canonical repository/building name among sonar-api / thj-envio / freeside-sonar / thj-indexer / envio-indexer."
+      - "Whether Kitchen is a separate building from the belt indexer or an in-building actor host (dedicated DB + separate Dockerfile vs shared product)."
+      - "Whether TrackedHolder/Action/CollectionStat are first-class actors or projections of Token/Transfer."
+      - "Whether truth-contract control plane belongs in this building inventory or is agent/meta tooling."
+      - "Ownership of Score inbox / post-outbox consumer facts (cross-repo)."

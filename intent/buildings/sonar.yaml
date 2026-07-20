@@ -1,0 +1,20 @@
+schema_version: 1
+id: sonar
+name: Sonar
+purpose: Resolve and prepare chain-qualified ownership data and expose attributable snapshots.
+owns:
+  - preparation_job
+  - ownership_snapshot
+  - ownership_readiness
+accepts:
+  - ResolveContract
+  - PrepareCollection
+produces:
+  - ownership.ready
+  - prep.failed
+  - ownership_snapshot
+never:
+  - mutate audit_order
+  - mutate audit_artifact
+  - activate Score catalog state
+runtime_policy: existing-sonar-kitchen-and-read-plane

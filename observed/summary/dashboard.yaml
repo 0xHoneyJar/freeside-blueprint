@@ -1,0 +1,13 @@
+repository: 0xHoneyJar/freeside-dashboard
+commit: ad267315984055dd35e92396f65c14f2028f1225
+classification: observed
+summary:
+  role: UI/BFF with no durable domain nouns.
+  active_dependencies:
+    - identity-api
+    - ordering-service
+    - score-api
+    - inventory-api
+  pressure:
+    - process-local order and access-request stubs can resemble real ownership
+    - preview/shadow surfaces may outrun upstream readiness
