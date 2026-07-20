@@ -94,6 +94,22 @@ Dashboard owns no backend truth.
 
 A capability does not automatically deserve a repository, service, database, queue, actor, or MCP server. Start as a function or module inside the correct owner.
 
+### GetScoreSnapshot — MVP field mapping
+
+Inspected: `score-api` @ `898bc165da2651d0c2ca0692a5d014023ef87c98`.
+
+Classification: **PARTIAL**. Closest existing query: `GET /v1/communities/:communityId/cohorts` (read-only).
+
+| Artifact field | MVP source | Notes |
+|---|---|---|
+| holder_turnover | approximate from `counts.new` + exits/`exited` | Not a formal PIT rollup |
+| sold_or_lapsed_wallet_count | `counts.sold` + `counts.lapsed` | EXISTS |
+| newly_eligible_wallet_count | `counts.new` | Labeled as new holders in window (option A) |
+| concentration_notes | `counts.whale` + `concentration.{top10_share,hhi,gini}` | EXISTS |
+| stale_access_risk_estimate | `counts.stale_access` | Descriptive count (Fact), not a calibrated probability |
+
+Seam: Score cohorts are keyed by `communityId`, while the audit order is chain + contract. Ordering (or a prior resolve step) must obtain community id without Score catalog admission. Do not use register / scoring-config / admin refresh mutation lanes for report fulfillment.
+
 ## State
 
 Only long-lived product machines for the MVP:
