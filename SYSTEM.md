@@ -12,20 +12,31 @@ Rules:
 - Everything else is parked.
 
 ```mermaid
+%%{init: {
+  "flowchart": {
+    "curve": "linear",
+    "nodeSpacing": 40,
+    "rankSpacing": 65
+  }
+}}%%
+
 flowchart LR
-    U[Visitor]
-    D[Dashboard]
-    O[Orders<br/>owns AuditOrder + AuditArtifact]
+    V[Visitor]
+    D[Dashboard<br/>presents requests and results]
+    O[Orders<br/>owns audit orders and artifacts]
     S[Sonar<br/>owns ownership preparation]
     C[Score<br/>owns scoring data]
-    I[Identity<br/>account + community after value]
+    I[Identity<br/>owns accounts and communities]
 
-    U --> D
-    D -->|PlaceAuditOrder| O
-    O -->|PrepareCollection| S
-    S -->|ownership snapshot| O
-    O -->|GetScoreSnapshot| C
-    C -->|score snapshot| O
-    O -->|AuditArtifact| D
-    D -->|ClaimAudit| I
+    V --> D
+    D -->|Place audit order| O
+
+    O -->|Prepare collection| S
+    S -->|Ownership snapshot| O
+
+    O -->|Read score snapshot| C
+    C -->|Score snapshot| O
+
+    O -->|Audit artifact| D
+    D -.->|Claim audit after value| I
 ```
