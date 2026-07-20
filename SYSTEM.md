@@ -4,7 +4,7 @@ One request becomes one stored audit by combining a Sonar ownership
 snapshot with a Score snapshot.
 
 Rules:
-- Ordering owns the order and artifact.
+- Orders owns the order and artifact.
 - Sonar owns ownership preparation.
 - Score owns scoring data.
 - Dashboard only presents.
@@ -13,32 +13,19 @@ Rules:
 
 ```mermaid
 flowchart LR
-    U[Visitor<br/>chain + contract + date + optional rule]
+    U[Visitor]
+    D[Dashboard]
+    O[Orders<br/>owns AuditOrder + AuditArtifact]
+    S[Sonar<br/>owns ownership preparation]
+    C[Score<br/>owns scoring data]
+    I[Identity<br/>account + community after value]
 
-    D[Dashboard<br/>shows progress and result]
-
-    O[Ordering<br/>owns AuditOrder<br/>and AuditArtifact]
-
-    S[Sonar<br/>resolves contract<br/>indexes ownership<br/>produces ownership snapshot]
-
-    C[Score<br/>produces scoring snapshot]
-
-    I[Identity<br/>account + community<br/>after value]
-
-    U -->|request audit| D
-    D -->|place order| O
-
-    O -->|prepare collection| S
-    S -->|ownership ready<br/>snapshot ref| O
-
-    O -->|read score data| C
-    C -->|score snapshot ref| O
-
-    O -->|stored audit data| D
-    D -->|optional claim| I
-
-    W[Parked<br/>Worlds · NATS · MCP federation<br/>render formats · Discord mutation]
-
-    classDef parked stroke-dasharray: 5 5;
-    class W parked;
+    U --> D
+    D -->|PlaceAuditOrder| O
+    O -->|PrepareCollection| S
+    S -->|ownership snapshot| O
+    O -->|GetScoreSnapshot| C
+    C -->|score snapshot| O
+    O -->|AuditArtifact| D
+    D -->|ClaimAudit| I
 ```
