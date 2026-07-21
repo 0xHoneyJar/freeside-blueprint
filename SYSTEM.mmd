@@ -1,0 +1,16 @@
+flowchart LR
+    V[Visitor]
+    D[Dashboard]
+    O[Orders]
+    S[Sonar]
+    C[Score]
+    I[Identity]
+
+    V --> D
+    D -->|Place audit order| O
+    O -->|Prepare collection| S
+    S -->|Ownership Snapshot| O
+    O -->|Read Score Snapshot| C
+    C -->|Score Snapshot| O
+    O -->|Audit Artifact| D
+    D -.->|Claim after value| I
