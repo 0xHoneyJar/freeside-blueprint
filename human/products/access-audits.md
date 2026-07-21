@@ -5,9 +5,9 @@
 | Label | Meaning |
 |---|---|
 | `I` | Input supplied to the audit |
-| `E` | Evidence observed from the system |
-| `P` | Policy: a decision rule under a named authority |
-| `A` | Answer returned by the audit |
+| `E` | Evidence required from the system |
+| `P` | Policy under a named authority |
+| `A` | Answer returned to the user |
 
 ## Inputs
 
@@ -20,25 +20,25 @@
 
 ## Evidence
 
-| ID | Evidence | Owner |
-|---|---|---|
-| `E1` | Ownership at the reference date | Sonar |
-| `E2` | Ownership now | Sonar |
-| `E3` | Score at the reference date | Score |
-| `E4` | Score now, without catalog admission | Score |
-| `E5` | Current Discord role snapshot | Identity |
-| `E6` | Verified Discord-to-wallet links | Identity |
+| ID | Evidence |
+|---|---|
+| `E1` | Ownership at the reference date |
+| `E2` | Ownership now |
+| `E3` | Score at the reference date |
+| `E4` | Score now without catalog admission |
+| `E5` | Current Discord role snapshot |
+| `E6` | Verified Discord-to-wallet links |
 
 ## Policies
 
-| ID | Policy | Authority | Override |
-|---|---|---|---|
-| `P1` | Eligibility rule | Community administrator | Supplied as `I4`; defaults to current holder when omitted |
-| `P2` | Concentration and risk thresholds | Freeside product | Community administrator may configure |
-| `P3` | Unresolved members are not classified as stale; linked wallets count as one person | Freeside safety policy | Fixed |
-| `P4` | Discord role or roles included in the audit | Community administrator | Configurable |
+| ID | Policy | Authority |
+|---|---|---|
+| `P1` | Eligibility rule | Community administrator |
+| `P2` | Concentration and risk thresholds | Freeside product |
+| `P3` | Unresolved members are not classified as stale | Freeside safety |
+| `P4` | Discord roles included in the audit | Community administrator |
 
-No policy is valid without a named authority.
+A missing required input, evidence item, or policy returns `NOT_COMPUTABLE`.
 
 # Gate Leak Report
 
@@ -56,15 +56,14 @@ No policy is valid without a named authority.
 Rules:
 
 - Discord is not required.
-- `A5` is an estimate. It does not identify Discord members.
-- Missing required evidence returns `NOT_COMPUTABLE`.
+- `A5` is an estimate, not a Discord member list.
 - Running the audit does not register or activate a Score community.
 
 # Shadow Access Audit
 
 **Question:** Which current Discord members should be reviewed?
 
-It reuses current eligibility from the Gate Leak Report and adds Discord evidence.
+It reuses current eligibility and adds `E5`, `E6`, `P3`, and `P4`.
 
 | ID | Answer | Needs |
 |---|---|---|
@@ -74,14 +73,6 @@ It reuses current eligibility from the Gate Leak Report and adds Discord evidenc
 | `A10` | Members unresolved to a verified wallet | `E5`, `E6`, `P3` |
 | `A11` | Review candidates | `A8`, `A10`, `P3` |
 
-## Discord evidence intake
-
-Identity owns `E5` and `E6`.
-
-`E5` is intaken from a Discord role snapshot the end user shares. Prefer **no install** — the integration path depends on their incumbent Discord tooling and is not fixed here.
-
-Identity turns that shared snapshot into audit-ready role membership evidence. It does not require Freeside to be installed as a Discord bot for the MVP path unless a later human decision says otherwise.
-
 Rules:
 
 - Discord is read-only.
@@ -89,31 +80,3 @@ Rules:
 - Unlinked members remain unresolved.
 - Discord member count minus holder count is not proof of stale access.
 - Multiple wallets linked to one person are counted once.
-- Without `E5`, return `NOT_COMPUTABLE`.
-- With partial `E6`, return resolved answers plus `A10`.
-
-## Example
-
-At the reference date:
-
-- Alice was eligible.
-- Bob was eligible.
-
-Now:
-
-- Bob is eligible.
-- Carol is eligible.
-
-Gate Leak Report:
-
-- Alice lapsed.
-- Carol became newly eligible.
-- Bob stayed eligible.
-
-Discord currently gives Alice and Bob the holder role.
-
-Shadow Access Audit:
-
-- Alice is a review candidate.
-- Bob remains eligible.
-- Carol is eligible but missing the role.

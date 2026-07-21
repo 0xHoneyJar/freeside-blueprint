@@ -1,0 +1,43 @@
+{
+  "version": "2",
+  "ledger": "agent/work.jsonl",
+  "writable_paths": [
+    "agent/work.jsonl"
+  ],
+  "max_requirements_per_run": 1,
+  "max_findings_per_run": 1,
+  "max_issues_per_run": 1,
+  "max_events_per_run": 5,
+  "events": [
+    "run.started",
+    "proof.recorded",
+    "finding.recorded",
+    "issue.created",
+    "run.passed",
+    "run.stopped"
+  ],
+  "classifications": [
+    "INPUT_ERROR",
+    "UPSTREAM_FAILURE",
+    "MISSING_CAPABILITY",
+    "BOUNDARY_VIOLATION",
+    "INCONSISTENT_STATE",
+    "DECISION_REQUIRED"
+  ],
+  "finding_requirement_prefixes": [
+    "I",
+    "E",
+    "P"
+  ],
+  "issue_requirement_prefixes": [
+    "E"
+  ],
+  "issue_target_by_requirement": {
+    "E1": "0xHoneyJar/sonar-api",
+    "E2": "0xHoneyJar/sonar-api",
+    "E3": "0xHoneyJar/score-api",
+    "E4": "0xHoneyJar/score-api",
+    "E5": null,
+    "E6": "0xHoneyJar/identity-api"
+  }
+}
