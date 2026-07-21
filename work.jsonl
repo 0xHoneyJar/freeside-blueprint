@@ -1,5 +1,0 @@
-{"work_id":"audit-902d","event":"work.started","owner":"Sonar","subject":"eip155:1:0x902d94ba5bfc0cb408d1a6ca4b8f255d845e50e9","at":"2026-07-20T22:00:00Z"}
-{"work_id":"audit-902d","event":"proof.recorded","owner":"Sonar","proof":{"job_id":"ingest_8782378e4d8efdc03716488212ee7552_8153d3ff68e8a8e4","job_status":"completed","holder_count":2947,"ownership_ready":true,"indexed_at":"2026-07-21T03:37:35.000Z"},"at":"2026-07-21T03:37:35Z"}
-{"work_id":"audit-902d","event":"finding.recorded","owner":"Score","classification":"MISSING_CAPABILITY","finding":"Score cannot evaluate an unregistered subject","observed":"GET /v1/communities/lookup returns 404 NOT_REGISTERED; adjacent POST /v1/communities/register performs catalog admission","at":"2026-07-21T04:00:00Z"}
-{"work_id":"audit-902d","event":"issue.created","owner":"Score","issue_url":"https://github.com/0xHoneyJar/score-api/issues/570","at":"2026-07-21T04:05:00Z"}
-{"work_id":"audit-902d","event":"work.stopped","reason":"first unexpected state surfaced","at":"2026-07-21T04:05:01Z"}
