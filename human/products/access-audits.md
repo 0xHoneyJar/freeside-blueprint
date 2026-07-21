@@ -2,11 +2,11 @@
 
 ## Labels
 
-| ID | Meaning |
+| Label | Meaning |
 |---|---|
 | `I` | Input supplied to the audit |
-| `E` | Evidence required from the system |
-| `P` | Human-approved policy |
+| `E` | Evidence observed from the system |
+| `P` | Policy: a decision rule under a named authority |
 | `A` | Answer returned by the audit |
 
 ## Inputs
@@ -31,12 +31,14 @@
 
 ## Policies
 
-| ID | Human decision |
-|---|---|
-| `P1` | Eligibility rule |
-| `P2` | Reference-date interpretation |
-| `P3` | Concentration and risk thresholds |
-| `P4` | Role-review policy |
+| ID | Policy | Authority | Override |
+|---|---|---|---|
+| `P1` | Eligibility rule | Community administrator | Supplied as `I4`; defaults to current holder when omitted |
+| `P2` | Concentration and risk thresholds | Freeside product | Community administrator may configure |
+| `P3` | Unresolved members are not classified as stale; linked wallets count as one person | Freeside safety policy | Fixed |
+| `P4` | Discord role or roles included in the audit | Community administrator | Configurable |
+
+No policy is valid without a named authority.
 
 # Gate Leak Report
 
@@ -44,11 +46,11 @@
 
 | ID | Answer | Needs |
 |---|---|---|
-| `A1` | Holder turnover | `E1`, `E2`, `P2` |
-| `A2` | Sold or lapsed wallet count | `E1`, `E2`, `E3`, `E4`, `P1`, `P2` |
-| `A3` | Newly eligible wallet count | `E1`, `E2`, `E3`, `E4`, `P1`, `P2` |
-| `A4` | Whale and concentration notes | `E2`, `P3` |
-| `A5` | Stale-access risk estimate | `E1`, `E2`, `E3`, `E4`, `P1`, `P2`, `P3` |
+| `A1` | Holder turnover | `E1`, `E2` |
+| `A2` | Sold or lapsed wallet count | `E1`, `E2`, `E3`, `E4`, `P1` |
+| `A3` | Newly eligible wallet count | `E1`, `E2`, `E3`, `E4`, `P1` |
+| `A4` | Whale and concentration notes | `E2`, `P2` |
+| `A5` | Stale-access risk estimate | `E1`, `E2`, `E3`, `E4`, `P1`, `P2` |
 | `A6` | “Map this to Discord roles with a no-install Shadow Access Audit.” | — |
 
 Rules:
@@ -62,23 +64,25 @@ Rules:
 
 **Question:** Which current Discord members should be reviewed?
 
-It reuses current eligibility from the Gate Leak core and adds `E5`, `E6`, and `P4`.
+It reuses current eligibility from the Gate Leak Report and adds Discord evidence.
 
 | ID | Answer | Needs |
 |---|---|---|
-| `A7` | Role members who remain eligible | `E2`, `E4`, `E5`, `E6`, `P1` |
-| `A8` | Role members who are no longer eligible | `E2`, `E4`, `E5`, `E6`, `P1` |
-| `A9` | Eligible members missing the role | `E2`, `E4`, `E5`, `E6`, `P1` |
-| `A10` | Unresolved Discord members | `E5`, `E6` |
-| `A11` | Review candidates | `A8`, `A10`, `P4` |
+| `A7` | Role members who remain eligible | `E2`, `E4`, `E5`, `E6`, `P1`, `P4` |
+| `A8` | Role members who are no longer eligible | `E2`, `E4`, `E5`, `E6`, `P1`, `P4` |
+| `A9` | Eligible members missing the role | `E2`, `E4`, `E5`, `E6`, `P1`, `P4` |
+| `A10` | Members unresolved to a verified wallet | `E5`, `E6`, `P3` |
+| `A11` | Review candidates | `A8`, `A10`, `P3` |
 
 Rules:
 
 - Discord is read-only.
 - The audit never adds or removes roles.
 - Unlinked members remain unresolved.
-- Role-member count minus holder count is not proof of stale access.
-- Multiple wallets for one person are resolved before people are counted.
+- Discord member count minus holder count is not proof of stale access.
+- Multiple wallets linked to one person are counted once.
+- Without `E5`, return `NOT_COMPUTABLE`.
+- With partial `E6`, return resolved answers plus `A10`.
 
 ## Example
 
@@ -94,14 +98,14 @@ Now:
 
 Gate Leak Report:
 
-- lapsed: Alice
-- newly eligible: Carol
-- unchanged: Bob
+- Alice lapsed.
+- Carol became newly eligible.
+- Bob stayed eligible.
 
 Discord currently gives Alice and Bob the holder role.
 
 Shadow Access Audit:
 
-- review: Alice
-- still eligible: Bob
-- missing role: Carol
+- Alice is a review candidate.
+- Bob remains eligible.
+- Carol is eligible but missing the role.
