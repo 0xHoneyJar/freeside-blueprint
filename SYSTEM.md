@@ -130,12 +130,33 @@ MISSING_CAPABILITY
 Owner:
 Score
 
+Subject:
+eip155:1:0x902d94ba5bfc0cb408d1a6ca4b8f255d845e50e9
+
+Sonar (observed):
+ownership_ready=true; holders=2947;
+job=ingest_8782378e4d8efdc03716488212ee7552_8153d3ff68e8a8e4
+
+Score (observed):
+GET /v1/communities/lookup → 404 NOT_REGISTERED
+(register is not an equivalent path)
+
+Tracking:
+https://github.com/0xHoneyJar/score-api/issues/570
+
 Required capability:
 Read-only, non-admitting subject evaluation.
 
 Forbidden workaround:
 Registering the community solely to unblock the audit.
+
+Work ledger:
+./work.sh next  →  score-non-admitting-evaluation-001
 ```
+
+## Work ledger
+
+Append-only task receipts live in `work.jsonl`. Drive them with `./work.sh`. Four states only: queued → running → blocked | done (blocked → running allowed). Probe evidence belongs in event `proof` fields. Ledger state is not product truth.
 
 ## Never
 

@@ -7,23 +7,37 @@ Operator map for one product journey: one chain-qualified contract becomes one C
 | Path | Role |
 |---|---|
 | [SYSTEM.md](SYSTEM.md) | Current intended active system |
-| [runs/](runs/) | Evidence from real golden-path traces |
+| [work.jsonl](work.jsonl) | Append-only work ledger (workflow facts + probe proof) |
+| [work.sh](work.sh) | Tiny command surface over the ledger |
 
 ## Rules
 
 Read `SYSTEM.md` first.
 
-Open a run receipt only when investigating a specific failure.
-
 Open source repositories only for the current owner of the first unexpected state.
 
-## Agent workflow
+`work.jsonl` records workflow state. It is not product truth. Sonar/Score/Orders remain runtime authority; ledger completions require referenced proof.
+
+## Work ledger
+
+```bash
+./work.sh next
+./work.sh queue <run-id> <owner> <task>
+./work.sh start <run-id>
+./work.sh block <run-id> <classification> <proof> <next-action>
+./work.sh complete <run-id> <proof>
+./work.sh show <run-id>
+```
+
+States only: `queued` → `running` → `blocked` | `done` (and `blocked` → `running`).
+
+`next` returns exactly one runnable task.
+
+## Agent operating loop
 
 1. Read `SYSTEM.md`.
-2. Read the latest relevant run receipt.
-3. Identify the first unexpected state.
-4. Inspect only the named owner repository.
-5. Report: what exists; what is missing; the smallest change; what can be deleted afterward; the concrete proof.
-6. Do not modify parked systems.
-
-This repository is not production authority. It records operator intent, observed evidence, run receipts, and the first unexpected state.
+2. Run `./work.sh next`.
+3. Work only on the named owner and task.
+4. Produce proof.
+5. Append completed or blocked.
+6. Stop.
