@@ -7,10 +7,13 @@ flowchart LR
     I[Identity]
 
     V --> D
-    D -->|Place audit order| O
-    O -->|Prepare collection| S
+    D -->|Audit request| O
+
+    O -->|Preparation request| S
     S -->|Ownership Snapshot| O
-    O -->|Read Score Snapshot| C
+
+    O -->|Evaluation request| C
     C -->|Score Snapshot| O
+
     O -->|Audit Artifact| D
     D -.->|Claim after value| I

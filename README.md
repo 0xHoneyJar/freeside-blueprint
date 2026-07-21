@@ -1,32 +1,11 @@
 # Freeside Blueprints
 
-A tiny surface for understanding Freeside.
+Human-approved maps and product meaning live in `human/`.
 
-## Files
+Agent observations live in `agent/work.jsonl`.
 
-- `SYSTEM.mmd` — the current human-approved system map
-- `work.jsonl` — append-only agent observations
-- GitHub issues — problems that require implementation
+Read:
 
-## Rule
-
-Humans change the system map.
-
-Agents observe reality, record proof, create one issue, and stop.
-
-## Read order
-
-1. Open `SYSTEM.mmd`
-2. Read the latest relevant entries in `work.jsonl`
-3. Open the linked GitHub issue
-4. Inspect only the repository named as the current owner
-
-## Boundaries
-
-This repository does not:
-
-- run production
-- implement fixes
-- own product state
-- replace source repositories
-- contain an orchestration framework
+1. `human/SYSTEM.mmd`
+2. `human/products/access-audits.md`
+3. the linked GitHub issue
