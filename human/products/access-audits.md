@@ -26,7 +26,7 @@
 | `E2` | Ownership now | Sonar |
 | `E3` | Score at the reference date | Score |
 | `E4` | Score now, without catalog admission | Score |
-| `E5` | Current Discord role snapshot | Unresolved |
+| `E5` | Current Discord role snapshot | Identity |
 | `E6` | Verified Discord-to-wallet links | Identity |
 
 ## Policies
@@ -73,6 +73,14 @@ It reuses current eligibility from the Gate Leak Report and adds Discord evidenc
 | `A9` | Eligible members missing the role | `E2`, `E4`, `E5`, `E6`, `P1`, `P4` |
 | `A10` | Members unresolved to a verified wallet | `E5`, `E6`, `P3` |
 | `A11` | Review candidates | `A8`, `A10`, `P3` |
+
+## Discord evidence intake
+
+Identity owns `E5` and `E6`.
+
+`E5` is intaken from a Discord role snapshot the end user shares. Prefer **no install** — the integration path depends on their incumbent Discord tooling and is not fixed here.
+
+Identity turns that shared snapshot into audit-ready role membership evidence. It does not require Freeside to be installed as a Discord bot for the MVP path unless a later human decision says otherwise.
 
 Rules:
 
